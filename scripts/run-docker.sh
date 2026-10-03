@@ -105,4 +105,8 @@ if [ "$#" -eq "0" ]; then
 	set -- bash
 fi
 
+set +e
 $SUDO docker exec $CI_OPT --env "DOCKER_EXEC_PID_FILE_PATH=$DOCKER_EXEC_PID_FILE_PATH" --interactive $DOCKER_TTY $CONTAINER_NAME "$@"
+DOCKER_EXEC_RC=$?
+echo "[BANG RM DOCKER DEBUG] docker_exec_rc=$DOCKER_EXEC_RC" >&2
+exit "$DOCKER_EXEC_RC"
