@@ -1,0 +1,15 @@
+--- generate-db.js	2026-10-03 18:08:35.200563809 +0700
++++ generate-db.js.fixed	2026-10-03 18:08:35.184563809 +0700
+@@ -208,8 +208,10 @@
+ 
+         const packageName = fileMap.get(join(TERMUX_PREFIX.substring(1), path));
+         if (packageName === undefined) {
+-          console.error(`Package name not found for path: ${path}`);
+-          process.exit(1);
++          console.warn(
++            `WARNING: Package name not found for path: ${path}. Skipping...`,
++          );
++          return;
+         }
+         if (!binMap.has(packageName)) {
+           binMap.set(packageName, []);
