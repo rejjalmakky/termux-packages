@@ -338,7 +338,8 @@ build_bootstrap_killtree() {
 build_bootstrap_trap() {
 
 	local build_bootstrap_trap_exit_code=$?
-	trap - EXIT
+        echo "[BANG RM EXIT DEBUG] incoming_rc=$build_bootstrap_trap_exit_code signal=${1:-none}" >&2
+        trap - EXIT
 
 	[ -d "$BOOTSTRAP_TMPDIR" ] && rm -rf "$BOOTSTRAP_TMPDIR"
 
