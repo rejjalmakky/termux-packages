@@ -1,5 +1,5 @@
---- generate-db.js	2026-10-03 18:08:35.200563809 +0700
-+++ generate-db.js.fixed	2026-10-03 18:08:35.184563809 +0700
+--- a/generate-db.js
++++ b/generate-db.js
 @@ -208,8 +208,10 @@
  
          const packageName = fileMap.get(join(TERMUX_PREFIX.substring(1), path));
