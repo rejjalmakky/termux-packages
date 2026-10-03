@@ -1,0 +1,37 @@
+name: Build BANG RM Bootstrap
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout BANG RM packages
+        uses: actions/checkout@v4
+
+      - name: Build BANG RM ARM64 bootstrap
+        run: |
+          ./scripts/run-docker.sh \
+            ./scripts/build-bootstraps.sh \
+            --architectures aarch64 \
+            --no-build-unneeded-subpackages
+
+      - name: Verify bootstrap
+        run: |
+          echo "=== Bootstrap files ==="
+          find . -name "bootstrap-aarch64.zip" -type f -print
+          echo
+          echo "=== SHA256 ==="
+          find . -name "bootstrap-aarch64.zip" -type f -exec sha256sum {} \;
+
+      - name: Upload BANG RM bootstrap
+        uses: actions/upload-artifact@v4
+        with:
+          name: bang-rm-bootstrap-aarch64
+          path: "**/bootstrap-aarch64.zip"
+          if-no-files-found: error
