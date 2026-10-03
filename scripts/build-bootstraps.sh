@@ -690,4 +690,5 @@ main() {
 
 }
 
+trap 'rc=$?; echo "[BANG RM DEBUG] ERR rc=$rc line=$LINENO cmd=$BASH_COMMAND func=${FUNCNAME[*]}" >&2' ERR
 main "$@"
