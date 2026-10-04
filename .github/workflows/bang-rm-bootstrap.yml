@@ -14,6 +14,13 @@ jobs:
       - name: Checkout BANG RM packages
         uses: actions/checkout@v4
 
+      - name: Verify BANG RM package identity
+        run: |
+          echo "=== BANG RM PACKAGE IDENTITY ==="
+          grep -n 'TERMUX_APP__PACKAGE_NAME=' scripts/properties.sh
+          grep -n 'TERMUX_APP_PACKAGE=' scripts/properties.sh
+          grep -n 'TERMUX__PREFIX=' scripts/properties.sh
+
       - name: Build BANG RM package-builder
         run: |
           docker build \
