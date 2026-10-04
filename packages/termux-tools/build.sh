@@ -26,6 +26,11 @@ termux_step_pre_configure() {
 
 termux_step_post_make_install() {
 	TERMUX_PKG_CONFFILES="$(cat "$TERMUX_PKG_BUILDDIR/conffiles")"
+
+	# BANG RM: fix hard-coded com.termux path in termux-tools login.
+	if [ -f "$TERMUX_PREFIX/bin/login" ]; then
+		sed -i "s#/data/data/com.termux/files/usr#${TERMUX_PREFIX}#g" "$TERMUX_PREFIX/bin/login"
+	fi
 }
 
 termux_step_create_debscripts() {
