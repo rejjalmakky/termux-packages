@@ -329,12 +329,15 @@ set_build_bootstrap_traps() {
 
 build_bootstrap_killtree() {
 
-	local signal="$1"; local pid="$2"; local cpid
-	for cpid in $(pgrep -P "$pid"); do build_bootstrap_killtree "$signal" "$cpid"; done
-	[[ "$pid" != "$$" ]] && signal="${signal:=15}"; kill "-$signal" "$pid" 2>/dev/null
+        local signal="${1:-}"; local pid="${2:-}"; local cpid
+        for cpid in $(pgrep -P "$pid"); do build_bootstrap_killtree "$signal" "$cpid"; done
+
+        if [[ "$pid" != "$$" ]]; then
+                signal="${signal:-15}"
+                kill "-$signal" "$pid" 2>/dev/null || :
+        fi
 
 }
-
 build_bootstrap_trap() {
 
 	local build_bootstrap_trap_exit_code=$?
