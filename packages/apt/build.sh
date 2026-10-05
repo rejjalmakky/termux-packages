@@ -73,11 +73,9 @@ termux_step_pre_configure() {
 
 termux_step_post_make_install() {
 	{
-		echo "# The main termux repository, with cloudflare cache"
-		echo "deb https://packages-cf.termux.dev/apt/termux-main/ stable main"
-		echo "# The main termux repository, without cloudflare cache"
-		echo "# deb https://packages.termux.dev/apt/termux-main/ stable main"
-	} > $TERMUX_PREFIX/etc/apt/sources.list
+		echo "# BANG RM package repository"
+		echo "deb [trusted=yes] https://rejjalmakky.github.io/bang-rm-apt stable main"
+	} > "$TERMUX_PREFIX/etc/apt/sources.list"
 
 	# apt-transport-tor
 	ln -sfr $TERMUX_PREFIX/lib/apt/methods/http $TERMUX_PREFIX/lib/apt/methods/tor
