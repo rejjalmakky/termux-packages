@@ -36,6 +36,13 @@ termux_step_post_make_install() {
         if [ -f "$TERMUX_PREFIX/etc/profile.d/init-termux-properties.sh" ]; then
                 sed -i "s#/data/data/com.termux/files#${TERMUX_PREFIX%/usr}#g" "$TERMUX_PREFIX/etc/profile.d/init-termux-properties.sh"
         fi
+
+        # BANG RM: remove the stock Termux MOTD.
+        for motd_file in "$TERMUX_PREFIX/etc/motd" "$TERMUX_PREFIX/etc/motd-playstore"; do
+                if [ -f "$motd_file" ]; then
+                        : > "$motd_file"
+                fi
+        done
 }
 
 termux_step_create_debscripts() {
