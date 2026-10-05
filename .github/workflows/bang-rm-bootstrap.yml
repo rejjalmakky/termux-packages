@@ -2,6 +2,9 @@ name: Build BANG RM Bootstrap
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - bang-rm-infra-improvs
 
 permissions:
   contents: read
@@ -26,6 +29,63 @@ jobs:
           docker build \
             --tag ghcr.io/termux/package-builder:latest \
             scripts/
+
+      - name: Repair BANG RM APT Contents indexes
+        env:
+          BANG_RM_APT_TOKEN: ${{ secrets.BANG_RM_APT_TOKEN }}
+        run: |
+          set -e
+
+          test -n "$BANG_RM_APT_TOKEN" || {
+            echo "ERROR: BANG_RM_APT_TOKEN belum tersedia."
+            exit 1
+          }
+
+          sudo apt-get update
+          sudo apt-get install -y apt-utils
+
+          rm -rf apt-pages
+
+          git clone \
+            "https://x-access-token:${BANG_RM_APT_TOKEN}@github.com/rejjalmakky/bang-rm-apt.git" \
+            apt-pages
+
+          cd apt-pages
+
+          test -d pool/main
+          test -d dists/stable
+
+          for ARCH in aarch64 arm i686 x86_64; do
+            apt-ftparchive contents pool/main \
+              > "dists/stable/Contents-${ARCH}"
+
+            gzip -9c \
+              "dists/stable/Contents-${ARCH}" \
+              > "dists/stable/Contents-${ARCH}.gz"
+
+            test -s "dists/stable/Contents-${ARCH}.gz"
+            gzip -t "dists/stable/Contents-${ARCH}.gz"
+
+            echo "Contents-${ARCH}: $(wc -l < "dists/stable/Contents-${ARCH}") entries"
+          done
+
+          git config user.name "BANG RM Actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add dists/stable/Contents-*
+
+          if git diff --cached --quiet; then
+            echo "APT Contents indexes already current."
+          else
+            git commit -m "Repair BANG RM APT Contents indexes"
+            git push origin HEAD:gh-pages
+          fi
+
+          echo "=== VERIFY PUBLIC CONTENTS ==="
+          curl -fsSI \
+            https://rejjalmakky.github.io/bang-rm-apt/dists/stable/Contents-aarch64.gz
+
+          echo "=== BANG RM APT CONTENTS READY ==="
 
       - name: Build BANG RM ARM64 bootstrap
         run: |
