@@ -32,6 +32,11 @@ termux_step_post_make_install() {
 		sed -i "s#/data/data/com.termux/files/usr#${TERMUX_PREFIX}#g" "$TERMUX_PREFIX/bin/login"
        fi
 
+        # BANG RM: fix hard-coded com.termux path in pkg.
+        if [ -f "$TERMUX_PREFIX/bin/pkg" ]; then
+                sed -i "s#/data/data/com.termux/files/usr#${TERMUX_PREFIX}#g" "$TERMUX_PREFIX/bin/pkg"
+        fi
+
         # BANG RM: fix init-termux-properties startup path.
         if [ -f "$TERMUX_PREFIX/etc/profile.d/init-termux-properties.sh" ]; then
                 sed -i "s#/data/data/com.termux/files#${TERMUX_PREFIX%/usr}#g" "$TERMUX_PREFIX/etc/profile.d/init-termux-properties.sh"
