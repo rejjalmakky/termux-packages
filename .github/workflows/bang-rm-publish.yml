@@ -2,7 +2,7 @@ name: BANG RM APT Publisher
 
 on:
   workflow_run:
-    workflows: ["Package updates"]
+    workflows: ["Packages"]
     types: [completed]
 
 permissions:
