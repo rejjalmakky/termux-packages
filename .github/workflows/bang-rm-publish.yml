@@ -149,6 +149,17 @@ jobs:
             echo "Packages: $(grep -c '^Package:' "$OUT" || true)"
           done
 
+          echo
+          echo "=== BUILD CONTENTS INDEX ==="
+
+          for ARCH in aarch64 arm i686 x86_64; do
+            CONTENTS="dists/stable/Contents-${ARCH}"
+            apt-ftparchive contents pool/main > "$CONTENTS"
+            gzip -9c "$CONTENTS" > "$CONTENTS.gz"
+
+            echo "Contents-${ARCH}: $(wc -l < "$CONTENTS") entries"
+          done
+
           cat > apt-ftparchive.conf <<'APTCONF'
           APT::FTPArchive::Release {
             Origin "BANG RM";
