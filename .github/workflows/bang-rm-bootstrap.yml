@@ -67,7 +67,9 @@ jobs:
           set -e
 
           rm -rf apt-validation
-          mkdir -p apt-validation/pool/main/test-package/DEBIAN
+          mkdir -p \
+            apt-validation/pool/main/test-package/DEBIAN \
+            apt-validation/pool/main/test-package/usr/share/doc/bang-rm-apt-validation
 
           cat > apt-validation/pool/main/test-package/DEBIAN/control <<'EOF'
           Package: bang-rm-apt-validation
@@ -78,6 +80,10 @@ jobs:
           Maintainer: BANG RM <bangrm@example.invalid>
           Description: BANG RM APT metadata validation package
           EOF
+
+          printf '%s\n' \
+            'BANG RM APT metadata validation package' \
+            > apt-validation/pool/main/test-package/usr/share/doc/bang-rm-apt-validation/README
 
           dpkg-deb --build \
             apt-validation/pool/main/test-package \
