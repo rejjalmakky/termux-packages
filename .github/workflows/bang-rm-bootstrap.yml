@@ -81,9 +81,26 @@ jobs:
             git push origin HEAD:gh-pages
           fi
 
-          echo "=== VERIFY PUBLIC CONTENTS ==="
-          curl -fsSI \
-            https://rejjalmakky.github.io/bang-rm-apt/dists/stable/Contents-aarch64.gz
+          echo "=== WAIT FOR GITHUB PAGES DEPLOYMENT ==="
+
+          URL="https://rejjalmakky.github.io/bang-rm-apt/dists/stable/Contents-aarch64.gz"
+          READY=0
+
+          for i in $(seq 1 30); do
+            if curl -fsSI "$URL" >/dev/null 2>&1; then
+              echo "GitHub Pages ready on attempt $i/30."
+              READY=1
+              break
+            fi
+
+            echo "GitHub Pages belum ready, percobaan $i/30..."
+            sleep 10
+          done
+
+          if [ "$READY" -ne 1 ]; then
+            echo "ERROR: GitHub Pages tidak tersedia setelah 5 menit."
+            exit 1
+          fi
 
           echo "=== BANG RM APT CONTENTS READY ==="
 
