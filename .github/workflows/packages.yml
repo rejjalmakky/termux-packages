@@ -6,6 +6,7 @@ on:
     - master
     - dev
     - 'dev/**'
+    - bang-rm-infra-improvs
     paths:
     - 'packages/**'
     - 'root-packages/**'
