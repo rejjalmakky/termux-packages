@@ -1,7 +1,7 @@
 {
   "pkg_format": "debian",
   "packages": {
-    "name": "bang-rm-main",
+    "name": "termux-main",
     "distribution": "stable",
     "component": "main",
     "url": "https://rejjalmakky.github.io/bang-rm-apt"
