@@ -1,0 +1,169 @@
+name: BANG RM Build and Publish Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Nama paket yang akan di-build (contoh: python)'
+        required: true
+        default: 'python'
+      architecture:
+        description: 'Arsitektur target'
+        required: true
+        default: 'aarch64'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout BANG RM packages
+        uses: actions/checkout@v4
+
+      - name: Verify BANG RM package identity
+        run: |
+          echo "=== VERIFIKASI IDENTITAS BANG RM ==="
+          grep -n 'TERMUX_APP__PACKAGE_NAME=' scripts/properties.sh
+          grep -n 'TERMUX_APP_PACKAGE=' scripts/properties.sh
+          grep -n 'TERMUX__PREFIX=' scripts/properties.sh
+
+      - name: Build BANG RM package-builder Docker
+        run: |
+          docker build \
+            --tag ghcr.io/termux/package-builder:latest \
+            scripts/
+
+      - name: Compile Package and Dependencies
+        run: |
+          set -e
+          PKG="${{ github.event.inputs.package_name }}"
+          ARCH="${{ github.event.inputs.architecture }}"
+          echo "Memulai kompilasi paket: $PKG ($ARCH)"
+
+          ./scripts/run-docker.sh \
+            ./build-package.sh \
+            -a "$ARCH" \
+            --no-build-unneeded-subpackages \
+            "$PKG"
+
+      - name: Validate Deb Packages
+        run: |
+          set -e
+          echo "=== VALIDASI PATH .DEB ==="
+          BAD=0
+          DEB_COUNT=0
+
+          while IFS= read -r deb; do
+            [ -f "$deb" ] || continue
+            DEB_COUNT=$((DEB_COUNT + 1))
+            echo "Memeriksa: $(basename "$deb")"
+            if dpkg-deb -c "$deb" | grep -Fq '/data/data/com.termux'; then
+              echo "::error file=$deb::DITEMUKAN PATH HARAM: com.termux di $deb"
+              BAD=1
+            fi
+          done < <(find output -maxdepth 1 -type f -name '*.deb')
+
+          echo "Total deb diperiksa: $DEB_COUNT"
+          if [ "$DEB_COUNT" -eq 0 ]; then
+            echo "::error::Tidak ada file .deb ditemukan di folder output/!"
+            exit 1
+          fi
+
+          if [ "$BAD" -ne 0 ]; then
+            echo "::error::Validasi GAGAL: Ada paket yang masih merujuk ke com.termux!"
+            exit 1
+          fi
+          echo "Semua paket lolos validasi: BERSIH dari com.termux."
+
+      - name: Upload Built Debs Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bang-rm-debs-${{ github.event.inputs.package_name }}-${{ github.event.inputs.architecture }}
+          path: output/*.deb
+          if-no-files-found: error
+
+      - name: Install APT Repository Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev apt-utils
+
+      - name: Publish to BANG RM APT Repository
+        env:
+          BANG_RM_APT_TOKEN: ${{ secrets.BANG_RM_APT_TOKEN }}
+        run: |
+          set -e
+          test -n "$BANG_RM_APT_TOKEN" || {
+            echo "ERROR: Secret BANG_RM_APT_TOKEN belum tersedia."
+            exit 1
+          }
+
+          rm -rf apt-pages
+          git clone \
+            "https://x-access-token:${BANG_RM_APT_TOKEN}@github.com/rejjalmakky/bang-rm-apt.git" \
+            apt-pages
+
+          cd apt-pages
+
+          if git ls-remote --exit-code origin refs/heads/gh-pages >/dev/null 2>&1; then
+            git fetch origin gh-pages
+            git checkout -B gh-pages FETCH_HEAD
+          else
+            git checkout --orphan gh-pages
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          mkdir -p pool/main
+          cp -f ../output/*.deb pool/main/
+
+          ARCH="${{ github.event.inputs.architecture }}"
+          OUT_DIR="dists/stable/main/binary-${ARCH}"
+          mkdir -p "$OUT_DIR"
+
+          {
+            dpkg-scanpackages --arch "$ARCH" pool/main /dev/null 2>/dev/null || true
+            dpkg-scanpackages --arch all pool/main /dev/null 2>/dev/null || true
+          } > "$OUT_DIR/Packages"
+
+          gzip -9c "$OUT_DIR/Packages" > "$OUT_DIR/Packages.gz"
+
+          # Rebuild Contents index
+          CONTENTS="dists/stable/Contents-${ARCH}"
+          apt-ftparchive contents pool/main > "$CONTENTS"
+          gzip -9c "$CONTENTS" > "$CONTENTS.gz"
+
+          # Release metadata
+          cat > apt-ftparchive.conf <<'APTCONF'
+          APT::FTPArchive::Release {
+            Origin "BANG RM";
+            Label "BANG RM";
+            Suite "stable";
+            Codename "stable";
+            Architectures "aarch64 arm i686 x86_64";
+            Components "main";
+            Description "BANG RM Termux APT Repository";
+          };
+          APTCONF
+
+          apt-ftparchive -c=apt-ftparchive.conf release dists/stable > dists/stable/Release
+          rm -f apt-ftparchive.conf
+          touch .nojekyll
+
+          git config user.name "BANG RM Actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add pool dists .nojekyll
+
+          if git diff --cached --quiet; then
+            echo "Tidak ada perubahan repository."
+          else
+            git commit -m "Publish ${{ github.event.inputs.package_name }} ($ARCH) ke BANG RM APT"
+            git push origin gh-pages
+          fi
+
+          echo "======================================"
+          echo " PUBLISH BERHASIL: ${{ github.event.inputs.package_name }} ($ARCH)"
+          echo " URL: https://rejjalmakky.github.io/bang-rm-apt"
+          echo "======================================"
