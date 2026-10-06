@@ -78,11 +78,19 @@ jobs:
           fi
           echo "Semua paket lolos validasi: BERSIH dari com.termux."
 
+      - name: Prepare Debs Artifact
+        run: |
+          set -e
+          echo "=== PACKAGING .DEB UNTUK ARTIFACT ==="
+          rm -f bang-rm-debs.tar.gz
+          tar -czf bang-rm-debs.tar.gz -C output -- *.deb
+          echo "Artifact berisi nama .deb ASLI; hanya dibungkus menjadi tar.gz agar ':' aman di GitHub Artifact."
+
       - name: Upload Built Debs Artifact
         uses: actions/upload-artifact@v4
         with:
           name: bang-rm-debs-${{ github.event.inputs.package_name }}-${{ github.event.inputs.architecture }}
-          path: output/*.deb
+          path: bang-rm-debs.tar.gz
           if-no-files-found: error
 
       - name: Install APT Repository Tools
