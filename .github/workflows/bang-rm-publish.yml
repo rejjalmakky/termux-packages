@@ -1,0 +1,213 @@
+name: BANG RM APT Publisher
+
+on:
+  workflow_run:
+    workflows: ["Packages"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  publish:
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      (github.event.workflow_run.head_branch == 'master' ||
+       github.event.workflow_run.head_branch == 'bang-rm-infra-improvs') &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download package artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -e
+
+          mkdir -p artifacts
+
+          gh run download "$RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'debs-*' \
+            --dir artifacts
+
+          echo "=== DOWNLOADED ARTIFACTS ==="
+          find artifacts -type f -maxdepth 3 -print
+
+      - name: Extract Debian packages
+        run: |
+          set -e
+
+          mkdir -p incoming debs
+
+          find artifacts \
+            -type f \
+            -name 'debs-*.tar' \
+            -print0 |
+          while IFS= read -r -d '' archive; do
+            echo "Extracting: $archive"
+            tar xf "$archive" -C incoming
+          done
+
+          find incoming \
+            -type f \
+            -name '*.deb' \
+            -exec cp -f {} debs/ \;
+
+          COUNT="$(find debs -type f -name '*.deb' | wc -l)"
+
+          echo
+          echo "DEB COUNT: $COUNT"
+
+          test "$COUNT" -gt 0
+
+      - name: Install repository tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev apt-utils
+
+      - name: Prepare existing APT repository
+        env:
+          BANG_RM_APT_TOKEN: ${{ secrets.BANG_RM_APT_TOKEN }}
+        run: |
+          set -e
+
+          test -n "$BANG_RM_APT_TOKEN" || {
+            echo "ERROR: BANG_RM_APT_TOKEN belum tersedia."
+            exit 1
+          }
+
+          rm -rf apt-pages
+
+          git clone \
+            "https://x-access-token:${BANG_RM_APT_TOKEN}@github.com/rejjalmakky/bang-rm-apt.git" \
+            apt-pages
+
+          cd apt-pages
+
+          if git ls-remote \
+            --exit-code origin refs/heads/gh-pages >/dev/null 2>&1
+          then
+            git fetch origin gh-pages
+            git checkout -B gh-pages FETCH_HEAD
+          else
+            git checkout --orphan gh-pages
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          mkdir -p pool/main
+
+          echo "=== EXISTING PACKAGES ==="
+          find pool/main -type f -name '*.deb' | wc -l
+
+      - name: Add new Debian packages
+        run: |
+          set -e
+
+          cp -f debs/*.deb apt-pages/pool/main/
+
+          echo "=== TOTAL PACKAGES AFTER MERGE ==="
+          find apt-pages/pool/main -type f -name '*.deb' | wc -l
+
+      - name: Rebuild APT metadata
+        run: |
+          set -e
+
+          cd apt-pages
+
+          rm -rf dists/stable
+
+          mkdir -p \
+            dists/stable/main/binary-aarch64 \
+            dists/stable/main/binary-arm \
+            dists/stable/main/binary-i686 \
+            dists/stable/main/binary-x86_64
+
+          for ARCH in aarch64 arm i686 x86_64; do
+            OUT="dists/stable/main/binary-${ARCH}/Packages"
+
+            {
+              dpkg-scanpackages \
+                --arch "$ARCH" \
+                pool/main \
+                /dev/null \
+                2>/dev/null || true
+
+              dpkg-scanpackages \
+                --arch all \
+                pool/main \
+                /dev/null \
+                2>/dev/null || true
+            } > "$OUT"
+
+            gzip -9c "$OUT" > "$OUT.gz"
+
+            echo
+            echo "=== $ARCH ==="
+            echo "Packages: $(grep -c '^Package:' "$OUT" || true)"
+          done
+
+          echo
+          echo "=== BUILD CONTENTS INDEX ==="
+
+          for ARCH in aarch64 arm i686 x86_64; do
+            CONTENTS="dists/stable/Contents-${ARCH}"
+            apt-ftparchive contents pool/main > "$CONTENTS"
+            gzip -9c "$CONTENTS" > "$CONTENTS.gz"
+
+            echo "Contents-${ARCH}: $(wc -l < "$CONTENTS") entries"
+          done
+
+          cat > apt-ftparchive.conf <<'APTCONF'
+          APT::FTPArchive::Release {
+            Origin "BANG RM";
+            Label "BANG RM";
+            Suite "stable";
+            Codename "stable";
+            Architectures "aarch64 arm i686 x86_64";
+            Components "main";
+            Description "BANG RM Termux APT Repository";
+          };
+          APTCONF
+
+          apt-ftparchive \
+            -c=apt-ftparchive.conf \
+            release dists/stable \
+            > dists/stable/Release
+
+          touch .nojekyll
+
+          rm -f apt-ftparchive.conf
+
+          echo
+          echo "=== APT TREE ==="
+          find dists/stable -type f | sort
+
+      - name: Publish repository
+        env:
+          BANG_RM_APT_TOKEN: ${{ secrets.BANG_RM_APT_TOKEN }}
+        run: |
+          set -e
+
+          cd apt-pages
+
+          git config user.name "BANG RM Actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add pool dists .nojekyll
+
+          if git diff --cached --quiet; then
+            echo "Tidak ada perubahan repository."
+          else
+            git commit -m "Publish BANG RM APT repository"
+            git push origin gh-pages
+          fi
+
+          echo
+          echo "======================================"
+          echo " BANG RM APT PUBLISH BERHASIL"
+          echo "======================================"
+          echo "https://rejjalmakky.github.io/bang-rm-apt"
