@@ -1,3 +1,4 @@
+# BANG RM: force Docker builder image rebuild for current NDK 28c environment
 # Build with:
 #	docker build -t ghcr.io/termux/package-builder .
 # Push to GitHub registry with:
