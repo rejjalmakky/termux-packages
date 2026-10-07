@@ -632,6 +632,7 @@ jobs:
         gpg \
           --batch \
           --yes \
+          --pinentry-mode loopback \
           --armor \
           --detach-sign \
           --local-user 920021C9B99F94207B8FFF030856AF332B477B56 \
@@ -641,6 +642,7 @@ jobs:
         gpg \
           --batch \
           --yes \
+          --pinentry-mode loopback \
           --armor \
           --clearsign \
           --local-user 920021C9B99F94207B8FFF030856AF332B477B56 \
