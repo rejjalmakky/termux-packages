@@ -488,7 +488,7 @@ jobs:
 
   publish-bang-rm-apt:
     name: Publish BANG RM APT
-    if: github.ref == 'refs/heads/bang-rm-infra-improvs'
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/bang-rm-infra-improvs' }}
     needs: build
     permissions:
       contents: read
