@@ -709,3 +709,5 @@ jobs:
           -m "Publish BANG RM packages ${GITHUB_SHA}"
 
         git push origin gh-pages
+
+# BANG RM: signed APT publisher is the only supported gh-pages publisher.
