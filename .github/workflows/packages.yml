@@ -549,6 +549,7 @@ jobs:
           ./bang-rm-apt
 
     - name: Merge packages into APT repository
+      if: env.BANG_RM_APT_NOOP != 'true'
       run: |
         set -euo pipefail
 
