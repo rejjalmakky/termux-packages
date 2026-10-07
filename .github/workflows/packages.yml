@@ -261,12 +261,28 @@ jobs:
         echo "packages: ${packages[*]}"
 
         if [[ "${#packages[@]}" -gt 0 ]]; then
+          # BANG RM builds its dependency chain locally.
+          # Do not use -I here because that requires a complete signed
+          # BANG RM APT repository before the first package can build.
           if [ "$DOCKER_BUILD" == 'false' ]; then
-            ./build-package.sh -I -C -a "${{ matrix.target_arch }}" "${packages[@]}"
+            ./build-package.sh -C -a "${{ matrix.target_arch }}" "${packages[@]}"
           else
-            ./scripts/run-docker.sh ./build-package.sh -I -C -a "${{ matrix.target_arch }}" "${packages[@]}"
+            ./scripts/run-docker.sh ./build-package.sh -C -a "${{ matrix.target_arch }}" "${packages[@]}"
           fi
         fi
+
+          echo "=== VERIFY BUILT DEB OUTPUT ==="
+
+          DEB_COUNT="$(find output -maxdepth 1 -type f -name '*.deb' | wc -l)"
+
+          echo "DEB_COUNT=$DEB_COUNT"
+
+          if [ "$DEB_COUNT" -eq 0 ]; then
+            echo "::error::Package build was requested but produced no .deb files."
+            exit 1
+          fi
+
+          find output -maxdepth 1 -type f -name '*.deb' -print
 
     - name: Generate build artifacts
       if: always()
