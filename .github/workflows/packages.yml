@@ -536,6 +536,8 @@ jobs:
         rm -rf ./bang-rm-apt
 
         git clone \
+          --branch gh-pages \
+          --single-branch \
           "https://x-access-token:${BANG_RM_APT_TOKEN}@github.com/rejjalmakky/bang-rm-apt.git" \
           ./bang-rm-apt
 
@@ -696,6 +698,7 @@ jobs:
         git config user.email "rejjalmakky@gmail.com"
 
         git add .nojekyll pool dists
+        git add -f dists/stable/Release.gpg dists/stable/InRelease
 
         if git diff --cached --quiet; then
           echo "No APT repository changes to publish."
