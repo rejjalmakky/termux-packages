@@ -624,6 +624,8 @@ jobs:
         test "$FINGERPRINT" = "920021C9B99F94207B8FFF030856AF332B477B56"
 
     - name: Sign APT Release metadata
+      env:
+        BANG_RM_APT_SIGNING_PASSPHRASE: ${{ secrets.BANG_RM_APT_SIGNING_PASSPHRASE }}
       run: |
         set -euo pipefail
 
@@ -633,6 +635,7 @@ jobs:
           --batch \
           --yes \
           --pinentry-mode loopback \
+          --passphrase "$BANG_RM_APT_SIGNING_PASSPHRASE" \
           --armor \
           --detach-sign \
           --local-user 920021C9B99F94207B8FFF030856AF332B477B56 \
@@ -643,6 +646,7 @@ jobs:
           --batch \
           --yes \
           --pinentry-mode loopback \
+          --passphrase "$BANG_RM_APT_SIGNING_PASSPHRASE" \
           --armor \
           --clearsign \
           --local-user 920021C9B99F94207B8FFF030856AF332B477B56 \
