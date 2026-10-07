@@ -480,3 +480,223 @@ jobs:
             fi
           fi
         done
+
+  publish-bang-rm-apt:
+    name: Publish BANG RM APT
+    if: github.ref == 'refs/heads/bang-rm-infra-improvs'
+    needs: build
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Clone source repository
+      uses: actions/checkout@v4
+
+    - name: Download all built DEB artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: debs-*-${{ github.sha }}
+        path: ./downloaded-artifacts
+        merge-multiple: false
+
+    - name: Extract DEB artifacts
+      run: |
+        set -euo pipefail
+
+        mkdir -p ./apt-stage/pool/main
+
+        for archive in downloaded-artifacts/debs-*/*.tar; do
+          echo "Extracting: $archive"
+          tar xf "$archive" -C ./apt-stage
+
+          find ./apt-stage/debs -type f -name '*.deb' -print0 |
+            xargs -0 -r -I{} cp -f "{}" ./apt-stage/pool/main/
+
+          rm -rf ./apt-stage/debs
+        done
+
+        echo "=== DEB FILES ==="
+        find ./apt-stage/pool/main -type f -name '*.deb' -print
+
+        DEB_COUNT="$(find ./apt-stage/pool/main -type f -name '*.deb' | wc -l)"
+        echo "DEB_COUNT=$DEB_COUNT"
+
+        if [ "$DEB_COUNT" -eq 0 ]; then
+          echo "::error::No .deb files were found in build artifacts."
+          exit 1
+        fi
+
+    - name: Clone BANG RM APT repository
+      env:
+        BANG_RM_APT_TOKEN: ${{ secrets.BANG_RM_APT_TOKEN }}
+      run: |
+        set -euo pipefail
+
+        rm -rf ./bang-rm-apt
+
+        git clone \
+          "https://x-access-token:${BANG_RM_APT_TOKEN}@github.com/rejjalmakky/bang-rm-apt.git" \
+          ./bang-rm-apt
+
+    - name: Merge packages into APT repository
+      run: |
+        set -euo pipefail
+
+        mkdir -p ./bang-rm-apt/pool/main
+
+        cp -f ./apt-stage/pool/main/*.deb \
+          ./bang-rm-apt/pool/main/
+
+        touch ./bang-rm-apt/.nojekyll
+
+    - name: Install APT metadata tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y apt-utils gnupg gzip
+
+    - name: Generate APT metadata
+      run: |
+        set -euo pipefail
+
+        cd ./bang-rm-apt
+
+        rm -rf dists/stable
+
+        mkdir -p \
+          dists/stable/main/binary-aarch64 \
+          dists/stable/main/binary-arm \
+          dists/stable/main/binary-i686 \
+          dists/stable/main/binary-x86_64
+
+        for arch in aarch64 arm i686 x86_64; do
+          echo "=== Generating Packages for $arch ==="
+
+          apt-ftparchive \
+            -a "$arch" \
+            packages pool/main \
+            > "dists/stable/main/binary-${arch}/Packages"
+
+          gzip -9 -c \
+            "dists/stable/main/binary-${arch}/Packages" \
+            > "dists/stable/main/binary-${arch}/Packages.gz"
+
+          if [ ! -s "dists/stable/main/binary-${arch}/Packages" ]; then
+            echo "::error::Packages file for $arch is empty."
+            exit 1
+          fi
+        done
+
+        cat > apt-ftparchive.conf <<'APTCONF'
+        APT::FTPArchive::Release::Origin "BANG RM";
+        APT::FTPArchive::Release::Label "BANG RM APT";
+        APT::FTPArchive::Release::Suite "stable";
+        APT::FTPArchive::Release::Codename "stable";
+        APT::FTPArchive::Release::Architectures "aarch64 arm i686 x86_64";
+        APT::FTPArchive::Release::Components "main";
+        APTCONF
+
+        apt-ftparchive \
+          -c=apt-ftparchive.conf \
+          release dists/stable \
+          > dists/stable/Release
+
+        echo "=== Release ==="
+        cat dists/stable/Release
+
+    - name: Import BANG RM signing key
+      env:
+        BANG_RM_APT_SIGNING_KEY: ${{ secrets.BANG_RM_APT_SIGNING_KEY }}
+      run: |
+        set -euo pipefail
+
+        printf '%s\n' "$BANG_RM_APT_SIGNING_KEY" |
+          gpg --batch --import
+
+        echo "=== Imported signing key ==="
+        gpg --list-keys --with-fingerprint "BANG RM APT"
+
+        FINGERPRINT="$(
+          gpg --list-keys --with-colons "BANG RM APT" |
+          awk -F: '$1 == "fpr" {print $10; exit}'
+        )"
+
+        test "$FINGERPRINT" = "920021C9B99F94207B8FFF030856AF332B477B56"
+
+    - name: Sign APT Release metadata
+      run: |
+        set -euo pipefail
+
+        cd ./bang-rm-apt
+
+        gpg \
+          --batch \
+          --yes \
+          --armor \
+          --detach-sign \
+          --local-user 920021C9B99F94207B8FFF030856AF332B477B56 \
+          --output dists/stable/Release.gpg \
+          dists/stable/Release
+
+        gpg \
+          --batch \
+          --yes \
+          --armor \
+          --clearsign \
+          --local-user 920021C9B99F94207B8FFF030856AF332B477B56 \
+          --output dists/stable/InRelease \
+          dists/stable/Release
+
+        echo "=== SIGNATURE FILES ==="
+        ls -lh \
+          dists/stable/Release \
+          dists/stable/Release.gpg \
+          dists/stable/InRelease
+
+    - name: Validate repository
+      run: |
+        set -euo pipefail
+
+        cd ./bang-rm-apt
+
+        echo "=== VALIDATING PACKAGE INDEXES ==="
+
+        for arch in aarch64 arm i686 x86_64; do
+          test -s "dists/stable/main/binary-${arch}/Packages"
+          test -s "dists/stable/main/binary-${arch}/Packages.gz"
+
+          echo "OK: $arch"
+        done
+
+        test -s dists/stable/Release
+        test -s dists/stable/Release.gpg
+        test -s dists/stable/InRelease
+
+        gpg --verify \
+          dists/stable/Release.gpg \
+          dists/stable/Release
+
+        echo "=== BANG RM APT REPOSITORY VALID ==="
+
+    - name: Commit and publish BANG RM APT
+      env:
+        GITHUB_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+
+        cd ./bang-rm-apt
+
+        git config user.name "BANG RM APT Publisher"
+        git config user.email "rejjalmakky@gmail.com"
+
+        git add .nojekyll pool dists
+
+        if git diff --cached --quiet; then
+          echo "No APT repository changes to publish."
+          exit 0
+        fi
+
+        git commit \
+          -m "Publish BANG RM packages ${GITHUB_SHA}"
+
+        git push origin gh-pages
