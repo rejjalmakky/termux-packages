@@ -273,6 +273,11 @@ jobs:
 
           echo "=== VERIFY BUILT DEB OUTPUT ==="
 
+          if [[ "${#packages[@]}" -eq 0 ]]; then
+            echo "No packages selected for this run; build is a NO-OP."
+            exit 0
+          fi
+
           DEB_COUNT="$(find output -maxdepth 1 -type f -name '*.deb' | wc -l)"
 
           echo "DEB_COUNT=$DEB_COUNT"
@@ -523,11 +528,13 @@ jobs:
         echo "DEB_COUNT=$DEB_COUNT"
 
         if [ "$DEB_COUNT" -eq 0 ]; then
-          echo "::error::No .deb files were found in build artifacts."
-          exit 1
+          echo "No .deb files were produced; marking this APT publish as a NO-OP."
+          echo "BANG_RM_APT_NOOP=true" >> "$GITHUB_ENV"
+          exit 0
         fi
 
     - name: Clone BANG RM APT repository
+      if: env.BANG_RM_APT_NOOP != 'true'
       env:
         BANG_RM_APT_TOKEN: ${{ secrets.BANG_RM_APT_TOKEN }}
       run: |
@@ -553,11 +560,13 @@ jobs:
         touch ./bang-rm-apt/.nojekyll
 
     - name: Install APT metadata tools
+      if: env.BANG_RM_APT_NOOP != 'true'
       run: |
         sudo apt-get update
         sudo apt-get install -y apt-utils gnupg gzip
 
     - name: Generate APT metadata
+      if: env.BANG_RM_APT_NOOP != 'true'
       run: |
         set -euo pipefail
 
@@ -607,6 +616,7 @@ jobs:
         cat dists/stable/Release
 
     - name: Import BANG RM signing key
+      if: env.BANG_RM_APT_NOOP != 'true'
       env:
         BANG_RM_APT_SIGNING_KEY: ${{ secrets.BANG_RM_APT_SIGNING_KEY }}
       run: |
@@ -626,6 +636,7 @@ jobs:
         test "$FINGERPRINT" = "920021C9B99F94207B8FFF030856AF332B477B56"
 
     - name: Sign APT Release metadata
+      if: env.BANG_RM_APT_NOOP != 'true'
       env:
         BANG_RM_APT_SIGNING_PASSPHRASE: ${{ secrets.BANG_RM_APT_SIGNING_PASSPHRASE }}
       run: |
@@ -662,6 +673,7 @@ jobs:
           dists/stable/InRelease
 
     - name: Validate repository
+      if: env.BANG_RM_APT_NOOP != 'true'
       run: |
         set -euo pipefail
 
@@ -687,6 +699,7 @@ jobs:
         echo "=== BANG RM APT REPOSITORY VALID ==="
 
     - name: Commit and publish BANG RM APT
+      if: env.BANG_RM_APT_NOOP != 'true'
       env:
         GITHUB_SHA: ${{ github.sha }}
       run: |
