@@ -593,8 +593,24 @@ jobs:
             "dists/stable/main/binary-${arch}/Packages" \
             > "dists/stable/main/binary-${arch}/Packages.gz"
 
+          echo "=== Generating Contents for $arch ==="
+
+          apt-ftparchive \
+            -a "$arch" \
+            contents pool/main \
+            > "dists/stable/Contents-${arch}"
+
+          gzip -9 -c \
+            "dists/stable/Contents-${arch}" \
+            > "dists/stable/Contents-${arch}.gz"
+
           if [ ! -s "dists/stable/main/binary-${arch}/Packages" ]; then
             echo "::error::Packages file for $arch is empty."
+            exit 1
+          fi
+
+          if [ ! -s "dists/stable/Contents-${arch}" ] || [ ! -s "dists/stable/Contents-${arch}.gz" ]; then
+            echo "::error::Contents file for $arch is empty."
             exit 1
           fi
         done
@@ -685,8 +701,10 @@ jobs:
         for arch in aarch64 arm i686 x86_64; do
           test -s "dists/stable/main/binary-${arch}/Packages"
           test -s "dists/stable/main/binary-${arch}/Packages.gz"
+          test -s "dists/stable/Contents-${arch}"
+          test -s "dists/stable/Contents-${arch}.gz"
 
-          echo "OK: $arch"
+          echo "OK: $arch (Packages + Contents)"
         done
 
         test -s dists/stable/Release
