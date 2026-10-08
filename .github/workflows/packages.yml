@@ -656,6 +656,28 @@ jobs:
 
         test "$FINGERPRINT" = "920021C9B99F94207B8FFF030856AF332B477B56"
 
+    - name: Export BANG RM public signing key
+      if: env.BANG_RM_APT_NOOP != 'true'
+      run: |
+        set -euo pipefail
+
+        mkdir -p ./bang-rm-apt
+
+        gpg \
+          --batch \
+          --export 920021C9B99F94207B8FFF030856AF332B477B56 \
+          > ./bang-rm-apt/bang-rm-apt-key.gpg
+
+        FINGERPRINT="$(
+          gpg --show-keys --with-colons \
+            ./bang-rm-apt/bang-rm-apt-key.gpg |
+          awk -F: '$1 == "fpr" {print $10; exit}'
+        )"
+
+        test "$FINGERPRINT" = "920021C9B99F94207B8FFF030856AF332B477B56"
+
+        echo "✅ BANG RM public key exported and verified."
+
     - name: Sign APT Release metadata
       if: env.BANG_RM_APT_NOOP != 'true'
       env:
@@ -733,7 +755,7 @@ jobs:
         git config user.name "BANG RM APT Publisher"
         git config user.email "rejjalmakky@gmail.com"
 
-        git add .nojekyll pool dists
+        git add .nojekyll pool dists bang-rm-apt-key.gpg
         git add -f dists/stable/Release.gpg dists/stable/InRelease
 
         if git diff --cached --quiet; then
