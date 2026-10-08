@@ -7,6 +7,6 @@ TERMUX_PKG_PLATFORM_INDEPENDENT=true
 TERMUX_PKG_BUILD_IN_SRC=true
 
 termux_step_make_install() {
-    install -Dm700 "$TERMUX_PKG_BUILDER_DIR/bang-rm" \
-        "$TERMUX_PREFIX/bin/bang-rm"
+	install -Dm700 "$TERMUX_PKG_BUILDER_DIR/bang-rm" \
+		"$TERMUX_PREFIX/bin/bang-rm"
 }
