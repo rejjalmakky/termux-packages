@@ -528,9 +528,8 @@ jobs:
         echo "DEB_COUNT=$DEB_COUNT"
 
         if [ "$DEB_COUNT" -eq 0 ]; then
-          echo "No .deb files were produced; marking this APT publish as a NO-OP."
-          echo "BANG_RM_APT_NOOP=true" >> "$GITHUB_ENV"
-          exit 0
+          echo "No new .deb files were produced."
+          echo "Continuing: regenerate and republish APT metadata from the existing gh-pages repository."
         fi
 
     - name: Clone BANG RM APT repository
