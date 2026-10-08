@@ -554,8 +554,13 @@ jobs:
 
         mkdir -p ./bang-rm-apt/pool/main
 
-        cp -f ./apt-stage/pool/main/*.deb \
-          ./bang-rm-apt/pool/main/
+        if compgen -G "./apt-stage/pool/main/*.deb" > /dev/null; then
+          cp -f ./apt-stage/pool/main/*.deb \
+            ./bang-rm-apt/pool/main/
+          echo "✅ New .deb packages merged."
+        else
+          echo "ℹ️ No new .deb packages; keeping existing APT packages."
+        fi
 
         touch ./bang-rm-apt/.nojekyll
 
