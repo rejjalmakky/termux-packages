@@ -44,11 +44,14 @@ jobs:
           export GNUPGHOME="$RUNNER_TEMP/gnupg"
           install -d -m 700 "$GNUPGHOME"
 
-          if printf '%s' "$SIGNING_KEY" | grep -q 'BEGIN PGP PRIVATE KEY BLOCK'; then
-            printf '%s\n' "$SIGNING_KEY" | gpg --batch --import
-          else
-            printf '%s' "$SIGNING_KEY" | base64 --decode | gpg --batch --import
-          fi
+          case "$SIGNING_KEY" in
+            *"BEGIN PGP PRIVATE KEY BLOCK"*)
+              printf '%s\n' "$SIGNING_KEY" | gpg --batch --import
+              ;;
+            *)
+              printf '%s' "$SIGNING_KEY" | base64 --decode | gpg --batch --import
+              ;;
+          esac
 
           EXPECTED="920021C9B99F94207B8FFF030856AF332B477B56"
 
