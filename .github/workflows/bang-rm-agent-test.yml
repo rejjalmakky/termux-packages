@@ -1,0 +1,71 @@
+name: BANG RM Agent Safe Build Test
+
+on:
+  push:
+    branches:
+      - fix-bang-rm-agent-012
+    paths:
+      - '.github/workflows/bang-rm-agent-test.yml'
+      - 'packages/bang-rm-agent/**'
+      - 'scripts/properties.sh'
+      - 'build-package.sh'
+      - 'scripts/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-only:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Verify standard Termux identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -nE 'TERMUX_APP__PACKAGE_NAME=|TERMUX__PREFIX_CLASSICAL=' scripts/properties.sh | head -20
+          grep -q 'TERMUX_APP__PACKAGE_NAME="${TERMUX_APP__PACKAGE_NAME:-com.termux}"' scripts/properties.sh
+
+      - name: Build package-builder
+        run: docker build --tag ghcr.io/termux/package-builder:latest scripts/
+
+      - name: Build and validate package
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/run-docker.sh ./build-package.sh -a aarch64 --no-build-unneeded-subpackages bang-rm-agent
+
+          mapfile -t debs < <(find output -maxdepth 1 -type f -name 'bang-rm-agent_*.deb')
+          if [ "${#debs[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one bang-rm-agent package"
+            find output -maxdepth 1 -type f -name '*.deb' -print || true
+            exit 1
+          fi
+
+          deb="${debs[0]}"
+          dpkg-deb -f "$deb" Package Version Architecture
+          dpkg-deb -c "$deb"
+
+          dpkg-deb -c "$deb" | grep -Fq 'data/data/com.termux/files/usr/bin/bang-rm'
+          if dpkg-deb -c "$deb" | grep -Fq 'data/data/com.bangrm.termux'; then
+            echo "::error::Wrong package prefix: com.bangrm.termux"
+            exit 1
+          fi
+
+          mkdir -p test-unpack
+          dpkg-deb -x "$deb" test-unpack
+          script="test-unpack/data/data/com.termux/files/usr/bin/bang-rm"
+          test -f "$script"
+          head -n 1 "$script" | grep -Fx '#!/system/bin/sh'
+          grep -Fq 'Version : 0.1.2' "$script"
+          echo "BUILD TEST PASSED. No APT publication performed."
+
+      - name: Save package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bang-rm-agent-test-aarch64
+          path: output/bang-rm-agent_*.deb
+          if-no-files-found: error
