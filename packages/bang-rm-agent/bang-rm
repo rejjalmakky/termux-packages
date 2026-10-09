@@ -1,8 +1,8 @@
-#!/data/data/com.bangrm.termux/files/usr/bin/bash
+#!/system/bin/sh
 
 echo "🧠 BANG RM AGENT READY"
 echo "━━━━━━━━━━━━━━━━━━━━━━"
-echo "Version : 0.1.1"
+echo "Version : 0.1.2"
 echo "Engine  : Local"
 echo "Status  : ONLINE"
 echo "━━━━━━━━━━━━━━━━━━━━━━"
