@@ -1,0 +1,128 @@
+
+name: Sign and Publish BANG RM APT Metadata
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bang-rm-apt-sign
+  cancel-in-progress: false
+
+jobs:
+  sign-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+
+      - name: Install GPG
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnupg
+
+      - name: Checkout APT repository
+        uses: actions/checkout@v4
+        with:
+          repository: rejjalmakky/bang-rm-apt
+          ref: gh-pages
+          path: apt-repo
+          token: ${{ secrets.BANG_RM_APT_TOKEN }}
+          persist-credentials: true
+
+      - name: Import signing key and verify fingerprint
+        env:
+          SIGNING_KEY: ${{ secrets.BANG_RM_APT_SIGNING_KEY }}
+          SIGNING_PASSPHRASE: ${{ secrets.BANG_RM_APT_SIGNING_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          install -d -m 700 "$GNUPGHOME"
+
+          if printf '%s' "$SIGNING_KEY" | grep -q 'BEGIN PGP PRIVATE KEY BLOCK'; then
+            printf '%s\n' "$SIGNING_KEY" | gpg --batch --import
+          else
+            printf '%s' "$SIGNING_KEY" | base64 --decode | gpg --batch --import
+          fi
+
+          EXPECTED="920021C9B99F94207B8FFF030856AF332B477B56"
+
+          ACTUAL="$(gpg --batch --with-colons --list-secret-keys |
+            awk -F: '
+              $1=="sec" {want=1; next}
+              $1=="ssb" {want=0}
+              $1=="fpr" && want {print $10; exit}
+            ')"
+
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::Signing key fingerprint mismatch"
+            exit 1
+          fi
+
+          echo "Signing key fingerprint verified."
+
+      - name: Sign and verify Release metadata
+        env:
+          SIGNING_PASSPHRASE: ${{ secrets.BANG_RM_APT_SIGNING_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+
+          cd apt-repo
+          test -s dists/stable/Release
+          test -s bang-rm-apt-key.gpg
+
+          gpg --batch --import bang-rm-apt-key.gpg
+
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$SIGNING_PASSPHRASE" \
+            --local-user 920021C9B99F94207B8FFF030856AF332B477B56 \
+            --clearsign \
+            --output dists/stable/InRelease \
+            dists/stable/Release
+
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$SIGNING_PASSPHRASE" \
+            --local-user 920021C9B99F94207B8FFF030856AF332B477B56 \
+            --armor --detach-sign \
+            --output dists/stable/Release.gpg \
+            dists/stable/Release
+
+          test -s dists/stable/InRelease
+          test -s dists/stable/Release.gpg
+
+          gpg --batch --verify dists/stable/InRelease
+
+          gpg --batch --yes \
+            --output "$RUNNER_TEMP/Release.from.InRelease" \
+            --decrypt dists/stable/InRelease
+
+          cmp dists/stable/Release "$RUNNER_TEMP/Release.from.InRelease"
+
+          gpg --batch --verify \
+            dists/stable/Release.gpg dists/stable/Release
+
+      - name: Publish signed metadata
+        env:
+          GH_TOKEN: ${{ secrets.BANG_RM_APT_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd apt-repo
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add dists/stable/InRelease dists/stable/Release.gpg
+
+          if git diff --cached --quiet; then
+            echo "Signed metadata is already up to date."
+            exit 0
+          fi
+
+          git commit -m "Publish signed BANG RM APT metadata"
+          git push origin HEAD:gh-pages
