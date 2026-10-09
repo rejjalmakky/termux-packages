@@ -271,6 +271,39 @@ jobs:
           fi
         fi
 
+        # Rewrite payload for the custom BANG RM APK package identity.
+        for deb in output/bang-rm-agent_*.deb; do
+          [ -f "$deb" ] || continue
+          work="$(mktemp -d)"
+          dpkg-deb -R "$deb" "$work"
+
+          if [ -d "$work/data/data/com.termux" ]; then
+            mv "$work/data/data/com.termux" \
+               "$work/data/data/com.bangrm.termux"
+          fi
+
+          if [ ! -f "$work/data/data/com.bangrm.termux/files/usr/bin/bang-rm" ]; then
+            echo "::error::BANG RM launcher missing at custom APK path"
+            rm -rf "$work"
+            exit 1
+          fi
+
+          launcher="$work/data/data/com.bangrm.termux/files/usr/bin/bang-rm"
+          if [ -f "$launcher" ]; then
+            sed -i \
+              's|/data/data/com\.termux/files/usr/bin/bash|/data/data/com.bangrm.termux/files/usr/bin/bash|' \
+              "$launcher"
+          fi
+
+          rebuilt="${deb}.rebuilt"
+          dpkg-deb -b "$work" "$rebuilt"
+          mv -f "$rebuilt" "$deb"
+          rm -rf "$work"
+
+          echo "=== VERIFY BANG RM PACKAGE PATH ==="
+          dpkg-deb -c "$deb" | grep 'data/data/com.bangrm.termux/files/usr/bin/bang-rm'
+        done
+
           echo "=== VERIFY BUILT DEB OUTPUT ==="
 
           if [[ "${#packages[@]}" -eq 0 ]]; then
