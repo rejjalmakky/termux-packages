@@ -3,7 +3,7 @@ TERMUX_PKG_DESCRIPTION="BANG RM Gemini AI agent for Termux"
 TERMUX_PKG_LICENSE="MIT"
 TERMUX_PKG_MAINTAINER="RM <rejjalmakky@gmail.com>"
 TERMUX_PKG_VERSION=0.1.0
-TERMUX_PKG_REVISION=4
+TERMUX_PKG_REVISION=5
 TERMUX_PKG_SKIP_SRC_EXTRACT=true
 TERMUX_PKG_DEPENDS="python"
 TERMUX_PKG_CONFLICTS="bang-rm-agent"
@@ -24,7 +24,7 @@ termux_step_make_install() {
 		"$TERMUX_PREFIX/share/bang-rm/safety.py"
 
 	cat > "$TERMUX_PREFIX/bin/bang-rm" <<'WRAPPER'
-#!/data/data/com.bangrm.termux/files/usr/bin/sh
+#!/data/data/com.termux/files/usr/bin/sh
 exec python "$PREFIX/share/bang-rm/agent.py" "$@"
 WRAPPER
 

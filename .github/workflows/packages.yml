@@ -271,56 +271,40 @@ jobs:
           fi
         fi
 
-        # Rewrite payload for the custom BANG RM APK package identity.
+        # Verify BANG RM package uses the official Termux identity.
         for deb in output/bang-rm-agent_*.deb output/bang-rm_*.deb; do
           [ -f "$deb" ] || continue
-          work="$(mktemp -d)"
-          dpkg-deb -R "$deb" "$work"
 
-          if [ -d "$work/data/data/com.termux" ]; then
-            mv "$work/data/data/com.termux" \
-               "$work/data/data/com.bangrm.termux"
-          fi
+          echo "=== VERIFY OFFICIAL TERMUX PACKAGE: $deb ==="
 
-          if [ ! -f "$work/data/data/com.bangrm.termux/files/usr/bin/bang-rm" ]; then
-            echo "::error::BANG RM launcher missing at custom APK path"
-            rm -rf "$work"
+          if dpkg-deb -c "$deb" | grep -q 'data/data/com.bangrm.termux'; then
+            echo "::error::Custom Termux package path detected."
             exit 1
           fi
 
-          launcher="$work/data/data/com.bangrm.termux/files/usr/bin/bang-rm"
-          if [ -f "$launcher" ]; then
-            sed -i \
-              's|/data/data/com\.termux/files/usr/bin/bash|/data/data/com.bangrm.termux/files/usr/bin/bash|' \
-              "$launcher"
+          if ! dpkg-deb -c "$deb" | grep -q 'data/data/com.termux/files/usr/bin/bang-rm'; then
+            echo "::error::Official Termux launcher missing."
+            exit 1
           fi
-
-          rebuilt="${deb}.rebuilt"
-          dpkg-deb -b "$work" "$rebuilt"
-          mv -f "$rebuilt" "$deb"
-          rm -rf "$work"
-
-          echo "=== VERIFY BANG RM PACKAGE PATH ==="
-          dpkg-deb -c "$deb" | grep 'data/data/com.bangrm.termux/files/usr/bin/bang-rm'
         done
 
-          echo "=== VERIFY BUILT DEB OUTPUT ==="
+        echo "=== VERIFY BUILT DEB OUTPUT ==="
 
-          if [[ "${#packages[@]}" -eq 0 ]]; then
-            echo "No packages selected for this run; build is a NO-OP."
-            exit 0
-          fi
+        if [[ "${#packages[@]}" -eq 0 ]]; then
+          echo "No packages selected for this run; build is a NO-OP."
+          exit 0
+        fi
 
-          DEB_COUNT="$(find output -maxdepth 1 -type f -name '*.deb' | wc -l)"
+        DEB_COUNT="$(find output -maxdepth 1 -type f -name '*.deb' | wc -l)"
 
-          echo "DEB_COUNT=$DEB_COUNT"
+        echo "DEB_COUNT=$DEB_COUNT"
 
-          if [ "$DEB_COUNT" -eq 0 ]; then
-            echo "::error::Package build was requested but produced no .deb files."
-            exit 1
-          fi
+        if [ "$DEB_COUNT" -eq 0 ]; then
+          echo "::error::Package build was requested but produced no .deb files."
+          exit 1
+        fi
 
-          find output -maxdepth 1 -type f -name '*.deb' -print
+        find output -maxdepth 1 -type f -name '*.deb' -print
 
     - name: Generate build artifacts
       if: always()
