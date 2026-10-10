@@ -272,7 +272,7 @@ jobs:
         fi
 
         # Rewrite payload for the custom BANG RM APK package identity.
-        for deb in output/bang-rm-agent_*.deb; do
+        for deb in output/bang-rm-agent_*.deb output/bang-rm_*.deb; do
           [ -f "$deb" ] || continue
           work="$(mktemp -d)"
           dpkg-deb -R "$deb" "$work"
